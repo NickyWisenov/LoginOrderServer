@@ -5,7 +5,7 @@ const connection = mysql.createPool({
     host     : '127.0.0.1',
     user     : 'root',
     password : 'root',
-    port : '8889',
+    port : '3306',
     database: 'nodemysql'
   });
 
