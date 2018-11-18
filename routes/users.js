@@ -11,16 +11,17 @@ const passport = require('passport');
 
 users.use(cors());
 
+// Validation Function
 function validateInput(data) {
   let errors = {};
   if(validator.isEmpty(data.email)){
-    errors.username = 'This filed is required';
+    errors.email = 'Email is required';
   }
   if(!validator.isEmail(data.email)){
-    errors.username = 'username is invalid';
+    errors.email = 'Email is invalid';
   }
   if(validator.isEmpty(data.password)){
-    errors.password = 'This filed is required';
+    errors.password = 'Password is required';
   }
 
   return {
@@ -28,36 +29,44 @@ function validateInput(data) {
     isValid: isEmpty(errors)
   }
 }
-
+// User Login
 users.post('/login', (req, res) => {
   const { errors, isValid } = validateInput(req.body); //return isValid or Erorr
   if(!isValid){
-    res.status(400).json(errors);
+    return res.status(400).json(errors);
   }
 
-  const SELECT_QUERY = 'SELECT * FROM employee WHERE email = ?';
+  const SELECT_QUERY = 'SELECT * FROM employee WHERE email =  ?';
   const email = req.body.email;
-  const password = req.body.password;
 
   database.connection.query(SELECT_QUERY,  email, (err, results) => {
     if (err) {
-      res.status(400).json(err);
+      return res.status(400).json(err);
     }
-    if (results) {
+    if (results.length === 0) {
+      errors.email = 'User not found';
+      return res.status(404).json(errors);
+    } else {
+      // Compare Password with Encrypted Hash
+      const password = req.body.password;
       bcrypt.compare(password, results[0].password)
-        .then(function (isMatch) {
+        .then(async function (isMatch) {
           if (isMatch) {
+            const locations =await getLocations();
+
             const payload = {
               id: results[0].id,
-              firstName: results[0].First_Name,
-              lastName: results[0].Last_Name
+              First_Name: results[0].First_Name,
+              Last_Name: results[0].Last_Name,
+              locations: locations
             }
+
             jwt.sign(payload, 'secret', {
               expiresIn: 3600
             }, function (err, token) {
               if (err) console.log('There is some error in token', err);
               else {
-                res.json({
+                return res.json({
                   success: true, 
                   token: `Bearer ${token}`
                 });
@@ -72,7 +81,25 @@ users.post('/login', (req, res) => {
     }
   });
 });
+// Get Current User
+users.get('/me', passport.authenticate('jwt', { session: false }), function (req, res) {
+  return res.json({
+    id: req.employee.id,
+    First_Name: req.employee.First_Name,
+    Last_Name: req.employee.Last_Name,
+    email: req.employee.email
+  });
+});
 
+const getLocations = async () => {
+  try {
+    const LOCATION_QUERY = 'SELECT * FROM location';
+    var result = await database.connection.query(LOCATION_QUERY);
+    return result;
+  } catch(err) {
+    throw new Error(err)
+  }
+}
 
 module.exports = users;
 
