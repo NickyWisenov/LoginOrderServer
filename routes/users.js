@@ -52,7 +52,7 @@ users.post('/login', (req, res) => {
       bcrypt.compare(password, results[0].password)
         .then(async function (isMatch) {
           if (isMatch) {
-            const locations =await getLocations();
+            const locations =await getLocations(results[0].id);
 
             const payload = {
               id: results[0].id,
@@ -91,13 +91,32 @@ users.get('/me', passport.authenticate('jwt', { session: false }), function (req
   });
 });
 
-const getLocations = async () => {
+const getLocations = async (employeeId) => {
   try {
-    const LOCATION_QUERY = 'SELECT * FROM location';
-    var result = await database.connection.query(LOCATION_QUERY);
-    return result;
+    const LOCATION_ID_QUERY = 'SELECT location_id FROM employee_location WHERE employee_id =' + employeeId;
+    var locationIds = await database.connection.query(LOCATION_ID_QUERY);
+    
+    var locations = [];
+    await asyncForEach(locationIds, async (item) => {
+      const LOCATION_QUERY = 'SELECT * FROM location WHERE id = ' + item.location_id;
+      try {
+        var result = await database.connection.query(LOCATION_QUERY);
+        locations.push(result[0]);
+      } catch(err) {
+          throw new Error(err)
+      }
+    });
+
+    return locations;
   } catch(err) {
     throw new Error(err)
+  }
+}
+
+
+async function asyncForEach(array, callback) {
+  for (let index = 0; index < array.length; index++) {
+      await callback(array[index], index, array);
   }
 }
 

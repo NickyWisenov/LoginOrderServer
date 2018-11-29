@@ -13,7 +13,6 @@ orders.post('/getmovies', (req, res) => {
         if (err) {
             return res.status(400).json(err);
         }
-
         if (results.length === 0) {
             errors.movies = 'There are no Movies';
             return res.status(404).json(errors);
@@ -78,35 +77,33 @@ orders.get('/getOrders/:id', (req, res) => {
             } catch(err) {
                 throw new Error(err)
             }
+            
             var totalQuantity = 0;
             quantities.forEach(item =>{
                 totalQuantity += item.quantity;
             });
-
-            var LOCATION_QUERY = "SELECT city, country FROM location WHERE id = " + item.location_id;
+            
+            var LOCATION_QUERY = "SELECT id, city, country FROM location WHERE id = " + item.location_id;
             try {
                 var location = await database.connection.query(LOCATION_QUERY);
             } catch (err) {
                 throw new Error(err);
             }
-
+            
             var jsonItem = {
                 id: item.id,
                 week: item.week,
+                locationId: location[0].id,
                 location: location[0].city + "-" + location[0].country,
                 quantities: quantities,
                 totalQuantity: totalQuantity,
                 totalPrice: item.total_price,
                 comment: item.comment
             }
-
             resResult.push(jsonItem);
-
         });
         return res.status(200).json(resResult);
     });
-
-
 })
 
 // Delete Order
@@ -116,20 +113,52 @@ orders.delete('/:order_id', (req, res) => {
         if (err) {
             return res.status(400).json(err)
         }
-
         const DELETE_ORDER_QUANTITY_QUERY = 'DELETE FROM order_quantity WHERE movie_order_id = ' + req.params.order_id;
         database.connection.query(DELETE_ORDER_QUANTITY_QUERY, (err, res2) => {
             if (err) {
                 return res.status(400).json(err);
             }
-
             res.status(200).json({
                 result: "success"
             })
         })
-
     })
     
+})
+
+// Update the Order Data
+orders.put('/:order_id', (req, res) => {
+
+    const UPDATE_QUERY = 'UPDATE movie_order SET location_id = ?,  total_price = ?, comment = ? WHERE id = ?'
+    database.connection.query(UPDATE_QUERY, [req.body.location, req.body.totalPrice, req.body.comment, req.params.order_id], function (error, results) {
+        if (error) res.status(400).json(error);
+
+        if (results) {
+            const DELETE_ORDER_QUANTITY_QUERY = 'DELETE FROM order_quantity WHERE movie_order_id = ' + req.params.order_id;
+            database.connection.query(DELETE_ORDER_QUANTITY_QUERY, (err, delteRes) => {
+                if (err) {
+                    return res.status(400).json(err);
+                }
+                const QUANTITY_QUERY = 'INSERT INTO order_quantity SET ?';
+                req.body.moviesList.forEach(async (item) => {
+                    try {
+                        var result = await database.connection.query(QUANTITY_QUERY, {
+                            movie_order_id: req.params.order_id,
+                            movie_id: item.id,
+                            quantity: item.quantity
+                        });
+                    } catch(err) {
+                        throw new Error(err)
+                    }
+                });
+
+                res.status(200).json({
+                    result: "success",
+                    message: "Successfully Updated"
+                })
+            });
+        }
+    });
 })
 
 Date.prototype.getWeek = function () {
@@ -144,9 +173,3 @@ async function asyncForEach(array, callback) {
 }
 
 module.exports = orders;
-
-
-
-
-
-
