@@ -11,7 +11,7 @@ orders.post('/getmovies', (req, res) => {
     const MOVIE_QUERY = 'SELECT id, name, price FROM movie WHERE active = "1"';
     database.connection.query(MOVIE_QUERY, (err, results) => {
         if (err) {
-            return res.status(400).json(err);
+            return res.status(404).json(err);
         }
         if (results.length === 0) {
             errors.movies = 'There are no Movies';
@@ -23,9 +23,16 @@ orders.post('/getmovies', (req, res) => {
 });
 
 // Save Order
-orders.post('/', (req, res) => {
+orders.post('/', async (req, res) => {
     const now = new Date();
     const week = now.getWeek();
+    const SEARCH_QUERY = 'SELECT * FROM movie_order WHERE week = ' + week + ' AND location_id =' + req.body.location;
+    var result = await database.connection.query(SEARCH_QUERY);
+    if (result.length !== 0) {
+        return res.status(400).json({
+            errorMessage: "You can not order for the same location in a week"
+        })
+    }
 
     const ORDER_QUERY = 'INSERT INTO movie_order SET ?';
     database.connection.query(ORDER_QUERY, {
@@ -127,8 +134,25 @@ orders.delete('/:order_id', (req, res) => {
 })
 
 // Update the Order Data
-orders.put('/:order_id', (req, res) => {
+orders.put('/:order_id',async (req, res) => {
 
+    const PREV_LOCATION_QUERY = 'SELECT location_id FROM movie_order WHERE id =' + req.params.order_id;
+    var prev_location_id = await database.connection.query(PREV_LOCATION_QUERY);
+    
+    if (prev_location_id[0].location_id != req.body.location) {
+        // Check if there is order for the same location
+        const now = new Date();
+        const week = now.getWeek();
+
+        const SEARCH_QUERY = 'SELECT * FROM movie_order WHERE week = ' + week + ' AND location_id =' + req.body.location;
+        var result = await database.connection.query(SEARCH_QUERY);
+        if (result.length !== 0) {
+            return res.status(400).json({
+                errorMessage: "You can not order for the same location in a week"
+            })
+        }
+    }
+    
     const UPDATE_QUERY = 'UPDATE movie_order SET location_id = ?,  total_price = ?, comment = ? WHERE id = ?'
     database.connection.query(UPDATE_QUERY, [req.body.location, req.body.totalPrice, req.body.comment, req.params.order_id], function (error, results) {
         if (error) res.status(400).json(error);
