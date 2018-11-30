@@ -113,6 +113,52 @@ orders.get('/getOrders/:id', (req, res) => {
     });
 })
 
+// Get Orders By Week
+orders.post('/getOrdersByWeek/:week', (req, res) => {
+    const SELECT_QUERY = "SELECT id, week, location_id, total_price, comment FROM movie_order WHERE week = " + req.params.week + ' AND ordered_by =' + req.body.userId;
+    database.connection.query(SELECT_QUERY, async (err, results) => {
+        if (err) {
+            return res.status(400).json(err);
+        }
+
+        var resResult = [];
+
+        await asyncForEach(results, async (item) => {
+            var OUANTITY_QUERY = "SELECT movie_id, quantity FROM order_quantity WHERE movie_order_id =" + item.id;
+            try {
+                var quantities = await database.connection.query(OUANTITY_QUERY);
+            } catch(err) {
+                throw new Error(err)
+            }
+            
+            var totalQuantity = 0;
+            quantities.forEach(item =>{
+                totalQuantity += item.quantity;
+            });
+            
+            var LOCATION_QUERY = "SELECT id, city, country FROM location WHERE id = " + item.location_id;
+            try {
+                var location = await database.connection.query(LOCATION_QUERY);
+            } catch (err) {
+                throw new Error(err);
+            }
+            
+            var jsonItem = {
+                id: item.id,
+                week: item.week,
+                locationId: location[0].id,
+                location: location[0].city + "-" + location[0].country,
+                quantities: quantities,
+                totalQuantity: totalQuantity,
+                totalPrice: item.total_price,
+                comment: item.comment
+            }
+            resResult.push(jsonItem);
+        });
+        return res.status(200).json(resResult);
+    });
+})
+
 // Delete Order
 orders.delete('/:order_id', (req, res) => {
     const DELETE_ORDER_QUERY = 'DELETE FROM movie_order WHERE id =' + req.params.order_id;
